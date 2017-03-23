@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Syncing Data 2</title>
+    <meta charset="utf-8"/>
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding:0;
+        overflow: hidden;
+        
+        background: #BBDDAA;
+      }
+      
+      canvas {
+        margin: 0;
+      }
+      
+      p {
+        margin-left: 12px;
+        font-size: 1.2em;
+        width: 50%; 
+      }
+    </style>
+    <script src="/socket.io/socket.io.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.34/browser.min.js"></script>
+	<script type="text/babel">  
+        "use strict";
+    
+          // drawing data
+        let canvas;
+        let ctx;
+        let center;
+
+          // connection data
+        let socket;
+        let id;
+
+          // user data
+        let users = {};
+
+          // movement
+        const movement = {
+          boost: false,
+          sink: false,
+          up: false,
+          down: false,
+          left: false,
+          right: false,
+        }
+        let moveDown = false;
+        let moveUp = false;
+        let moveRight = false;
+        let moveLeft = false;
+        let boost = false;
+
+          // game data
+        let gameState = 'playing';
+
+        
+        const removeUser = (response) => {
+          console.dir(response);
+          if (users[response.user.info.id]) {
+            delete users[response.user.info.id];
+          }
+        };
+
+        const addUser = (response) => {
+          if (response === undefined) {
+            return;
+          }
+          
+          if (!users[response.user.info.id]) {
+            users[response.user.info.id] = response.user;
+          }
+        };
+        
+        const joinRoom = (data) => {
+          // set the user
+          id = data.self.info.id;
+          users[id] = data.self;
+          
+          // set the other users in the room
+          const keys = Object.keys(data.others);
+          for (let i = 0; i < keys.length; i++) {
+            users[data.others[keys[i]].info.id] = data.others[keys[i]];
+          }
+          
+          requestAnimationFrame(redraw);
+        };
+        
+        const update = (response) => {
+          
+          if (response.info.id === id) {
+            return;
+          }
+          
+          if (users[response.info.id].gameData.lastUpdate >= response.gameData.lastUpdate) {
+            return;
+          }
+          
+          const user = users[response.info.id];
+          user.gameData.a_x = response.gameData.a_x;
+          user.gameData.a_y = response.gameData.a_y;
+          user.gameData.b_x = response.gameData.b_x;
+          user.gameData.b_y = response.gameData.b_y;
+          user.gameData.c_x = response.gameData.c_x;
+          user.gameData.c_y = response.gameData.c_y;
+          user.gameData.boosting = response.gameData.boosting;
+          user.gameData.sunken = response.gameData.sunken;
+          user.gameData.sinking = response.gameData.sinking;
+          user.gameData.sinkProgress = response.gameData.sinkProgress;
+          user.clientData.alpha = 0.05;
+        };
+
+
+        const updateData = (response) => {
+          //console.log(response);
+          
+          const dataKeys = Object.keys(response.data);
+          
+          for (let i = 0; i < dataKeys.length; i++) {
+              // update each user
+            if (users[dataKeys[i]] === null) {
+              continue;
+            }
+            
+            const user = users[dataKeys[i]];
+            //console.dir(user.clientData);
+            
+            /*if (dataKeys[i] === id) {
+              continue;
+            }*/
+
+            if (users[dataKeys[i]].gameData.lastUpdate >= response.data[dataKeys[i]].lastUpdate) {
+              continue;
+            }
+
+            user.gameData.a_x = response.data[dataKeys[i]].a_x;
+            user.gameData.a_y = response.data[dataKeys[i]].a_y;
+            user.gameData.b_x = response.data[dataKeys[i]].b_x;
+            user.gameData.b_y = response.data[dataKeys[i]].b_y;
+            user.gameData.c_x = response.data[dataKeys[i]].c_x;
+            user.gameData.c_y = response.data[dataKeys[i]].c_y;
+            user.gameData.boosting = response.data[dataKeys[i]].boosting;
+            user.gameData.sunken = response.data[dataKeys[i]].sunken;
+            user.gameData.sinking = response.data[dataKeys[i]].sinking;
+            user.gameData.sinkProgress = response.data[dataKeys[i]].sinkProgress;
+            user.gameData.colliding = response.data[dataKeys[i]].colliding;
+            user.clientData.alpha = 0.05;
+            //console.dir(user.clientData);
+          }
+        }
+
+        
+        const updatePosition = () => {
+          const self = users[id];
+          
+          self.gameData.c_x = self.gameData.b_x;
+          self.gameData.c_y = self.gameData.b_y;
+          self.gameData.b_x = self.clientData.x;
+          self.gameData.b_y = self.clientData.y;
+          
+          if (moveUp && self.gameData.a_y > 0) {
+            self.gameData.a_y -= 2;
+          }
+          if (moveDown && self.gameData.a_y < 400) {
+            self.gameData.a_y += 2;
+          }
+          if (moveLeft && self.gameData.a_x > 0) {
+            self.gameData.a_x -= 2;
+          }
+          if (moveRight && self.gameData.a_x < 400) {
+            self.gameData.a_x += 2;
+          }
+          
+          self.clientData.alpha = 0.5;
+          
+          //socket.emit('moveSend', {info: {id: id}, gameData: users[id].gameData} );
+        };
+
+        const lerp2 = (v0, v1, alpha) => {
+          return (1 - alpha) * v0 + alpha * v1;
+        };
+
+        const lerp3 = (v0, v1, v2, alpha) => {
+          return (((1 - alpha) * ((1 - alpha) * v0 + alpha * v1)) + (((1 - alpha) * v1 + v2 * alpha) * alpha));
+        };
+        
+
+          // drawing method
+        const redraw = (time) => {
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          //ctx.fillStyle = '#BBDDAA';
+          //ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          const keys = Object.keys(users);
+
+          for (let i = 0; i < keys.length; i++) {
+            const user = users[keys[i]];
+            
+            if (user.clientData.alpha < 1) {
+              user.clientData.alpha += 0.05;
+            }
+            
+            ctx.save();
+            
+            ctx.fillStyle = user.info.color;
+            ctx.globalAlpha = 1;
+            
+            user.clientData.x = lerp3(user.gameData.c_x, user.gameData.b_x, user.gameData.a_x, user.clientData.alpha);
+            user.clientData.y = lerp3(user.gameData.c_y, user.gameData.b_y, user.gameData.a_y, user.clientData.alpha);
+            
+            
+          //  user.clientData.x = lerp2(user.gameData.c_x, user.gameData.a_x, user.clientData.alpha);
+          //  user.clientData.y = lerp2(user.gameData.c_y, user.gameData.a_y, user.clientData.alpha);
+            
+            
+            if (user.gameData.sinkProgress > 0 && !user.gameData.boosting) {
+              ctx.globalCompositeOperation = 'destination-over';
+            }
+            
+            if (user.gameData.sinkProgress > 0 && !user.gameData.boosting) {
+              ctx.save();
+
+              ctx.fillStyle = 'black';
+              ctx.globalAlpha = 0.6 * user.gameData.sinkProgress;
+              
+              ctx.beginPath();
+              ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            } else if (user.gameData.boosting) {
+              ctx.save();
+
+              ctx.fillStyle = 'white';
+              ctx.globalAlpha = 0.6;
+              ctx.beginPath();
+              ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
+              ctx.closePath();
+              ctx.fill();
+              ctx.restore();
+            }
+            
+            
+            ctx.beginPath();
+            ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
+          }
+
+          requestAnimationFrame(redraw);
+          //console.debug(users);
+        };
+        
+
+        const keyDownHandler = (e) => {
+          var keyPressed = e.which;
+
+          // W OR UP
+          if(keyPressed === 87 || keyPressed === 38) {
+            movement.up = true;
+          }
+          // A OR LEFT
+          else if(keyPressed === 65 || keyPressed === 37) {
+            movement.left = true;
+          }
+          // S OR DOWN
+          else if(keyPressed === 83 || keyPressed === 40) {
+            movement.down = true;
+          }
+          // D OR RIGHT
+          else if(keyPressed === 68 || keyPressed === 39) {
+            movement.right = true;
+          }
+          // SPACE
+          else if(keyPressed === 32) {
+            movement.sink = true;
+          }
+          // SHIFT
+          else if(keyPressed === 16) {
+            movement.boost = true;
+          }
+          
+          socket.emit('inputSend', { info: {id: id}, data: movement } );
+          
+          e.preventDefault();
+        };
+        
+        const keyUpHandler = (e) => {
+          var keyPressed = e.which;
+
+          // W OR UP
+          if(keyPressed === 87 || keyPressed === 38) {
+            movement.up = false;
+          }
+          // A OR LEFT
+          else if(keyPressed === 65 || keyPressed === 37) {
+            movement.left = false;
+          }
+          // S OR DOWN
+          else if(keyPressed === 83 || keyPressed === 40) {
+            movement.down = false;
+          }
+          // D OR RIGHT
+          else if(keyPressed === 68 || keyPressed === 39) {
+            movement.right = false;
+          }
+          // SPACE
+          else if(keyPressed === 32) {
+            movement.sink = false;
+          }
+          // SHIFT
+          else if(keyPressed === 16) {
+            movement.boost = false;
+          }
+          
+          socket.emit('inputSend', { info: {id: id}, data: movement } );
+          
+          e.preventDefault();
+        };
+
+        const resizeCanvas = (e) => {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+
+          center = {
+              x:window.innerWidth / 2,
+              y:window.innerHeight / 2
+          };
+          
+          console.log('resized');
+        }
+
+        const init = () => {
+          canvas = document.querySelector("#canvas");
+          ctx = canvas.getContext("2d");
+          
+          resizeCanvas();
+
+          socket = io.connect();
+          
+          //socket.emit('join', {});
+
+          socket.on('joinedRoom', joinRoom);
+          
+          socket.on('userJoined', addUser);
+
+          socket.on('userLeft', removeUser);
+
+          //socket.on('postUpdate', update);
+          
+          socket.on('postUpdate', updateData);
+
+          document.body.addEventListener('keydown', keyDownHandler);
+          document.body.addEventListener('keyup', keyUpHandler);
+          
+          window.addEventListener('resize', resizeCanvas);
+          
+          window.addEventListener('keyPress');
+          
+          redraw();
+        };
+
+      window.onload = init;
+    </script>
+</head>
+<body>
+    <canvas id="canvas">Please use an HTML 5 browser</canvas>
+</body>
+</html>

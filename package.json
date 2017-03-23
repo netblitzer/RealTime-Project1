@@ -1,0 +1,31 @@
+{
+  "name": "CanvasSyncing2",
+  "version": "1.0.0",
+  "description": "Canvas Syncing 2",
+  "main": "./server/server.js",
+  "dependencies": {
+    "socket.io": "^1.7.3"
+  },
+  "devDependencies": {
+    "eslint": "^3.16.0",
+    "eslint-config-airbnb": "^14.1.0",
+    "eslint-plugin-import": "^2.2.0",
+    "nodemon": "^1.11.0"
+  },
+  "scripts": {
+    "nodemon": "nodemon --watch ./server ./server/server.js",
+    "start": "node ./server/server.js",
+    "pretest": "eslint ./server --fix",
+    "test": "echo \"Tests complete\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/netblitzer/canvas-syncing-assignment-part4.git"
+  },
+  "author": "Luke Miller",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/netblitzer/canvas-syncing-assignment-part4/issues"
+  },
+  "homepage": "https://github.com/netblitzer/canvas-syncing-assignment-part4#readme"
+}
