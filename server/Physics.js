@@ -124,7 +124,8 @@ class Physics {
     for (let i = 0; i < dataKeys.length; i++) {
       const user = data[dataKeys[i]];
       const gameData = user.gameData;
-
+      
+      
         // check if the user is sunken
           // skip physics if it is
       if (!gameData.sunken) {
@@ -290,10 +291,8 @@ class Physics {
         gameData.physics.velocity.y += gameData.physics.acceleration.y * this.dT;
 
           // calculate the slowing from sinking
-        gameData.physics.velocity.x *= Math.max(0,
-                                                (timeToSink - (gameData.sinkProgress * 0.5)));
-        gameData.physics.velocity.y *= Math.max(0,
-                                                (timeToSink - (gameData.sinkProgress * 0.5)));
+        gameData.physics.velocity.x *= Math.max(0, (1 - (gameData.sinkProgress * 0.5)));
+        gameData.physics.velocity.y *= Math.max(0, (1 - (gameData.sinkProgress * 0.5)));
 
           // update positions
         gameData.c_x = gameData.b_x;
@@ -302,8 +301,7 @@ class Physics {
         gameData.b_y = gameData.a_y;
         gameData.a_x += gameData.physics.velocity.x * this.dT;
         gameData.a_y += gameData.physics.velocity.y * this.dT;
-
-        // console.dir(gameData);
+        
       }
     }
   }

@@ -212,8 +212,8 @@
             ctx.fillStyle = user.info.color;
             ctx.globalAlpha = 1;
             
-            user.clientData.x = lerp3(user.gameData.c_x, user.gameData.b_x, user.gameData.a_x, user.clientData.alpha);
-            user.clientData.y = lerp3(user.gameData.c_y, user.gameData.b_y, user.gameData.a_y, user.clientData.alpha);
+            user.clientData.x = 80 + lerp3(user.gameData.c_x, user.gameData.b_x, user.gameData.a_x, user.clientData.alpha);
+            user.clientData.y = 80 + lerp3(user.gameData.c_y, user.gameData.b_y, user.gameData.a_y, user.clientData.alpha);
             
             
           //  user.clientData.x = lerp2(user.gameData.c_x, user.gameData.a_x, user.clientData.alpha);
@@ -235,11 +235,14 @@
               ctx.closePath();
               ctx.fill();
               ctx.restore();
-            } else if (user.gameData.boosting) {
+            }
+            
+            if (user.gameData.boosting) {
               ctx.save();
 
               ctx.fillStyle = 'white';
-              ctx.globalAlpha = 0.6;
+              ctx.globalAlpha = 0.2;
+              
               ctx.beginPath();
               ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
               ctx.closePath();
@@ -248,6 +251,10 @@
             }
             
             
+            if (user.gameData.boosting) {
+              ctx.globalCompositeOperation = 'lighten';
+            }
+            
             ctx.beginPath();
             ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
             ctx.closePath();
@@ -255,6 +262,12 @@
             
             ctx.restore();
           }
+          
+          ctx.fillStyle = '#99AA88';
+          ctx.fillRect(0, 0, 30, 960);
+          ctx.fillRect(30, 0, 960, 30);
+          ctx.fillRect(30, 930, 960, 960);
+          ctx.fillRect(930, 30, 960, 930);
 
           requestAnimationFrame(redraw);
           //console.debug(users);
@@ -343,7 +356,7 @@
           canvas = document.querySelector("#canvas");
           ctx = canvas.getContext("2d");
           
-          resizeCanvas();
+          // resizeCanvas();
 
           socket = io.connect();
           
@@ -373,6 +386,6 @@
     </script>
 </head>
 <body>
-    <canvas id="canvas">Please use an HTML 5 browser</canvas>
+    <canvas id="canvas" height=960 width=960>Please use an HTML 5 browser</canvas>
 </body>
 </html>
