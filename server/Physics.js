@@ -157,15 +157,13 @@ class Physics {
         if (Math.abs(gameData.physics.velocity.x) < 0.1) {
           gameData.physics.velocity.x = 0;
         } else {
-          gameData.physics.forces.x -= gameData.physics.velocity.x *
-            gameData.physics.friction;
+          gameData.physics.forces.x -= gameData.physics.velocity.x * gameData.physics.friction;
         }
 
         if (Math.abs(gameData.physics.velocity.y) < 0.1) {
           gameData.physics.velocity.y = 0;
         } else {
-          gameData.physics.forces.y -= gameData.physics.velocity.y *
-            gameData.physics.friction;
+          gameData.physics.forces.y -= gameData.physics.velocity.y * gameData.physics.friction;
         }
 
           // check collisions and add calculate physics
@@ -175,8 +173,9 @@ class Physics {
             // check to see if the other user is sunken
               // skip them if they are
           if (!other.sunken) {
-            const dist = Math.sqrt(((gameData.a_x - other.a_x) ** 2) +
-                                   ((gameData.a_y - other.a_y) ** 2));
+            const dx = ((gameData.a_x - other.a_x) ** 2);
+            const dy = ((gameData.a_y - other.a_y) ** 2);
+            const dist = Math.sqrt(dx + dy);
 
             if (dist < 100) {
               gameData.colliding = true;
