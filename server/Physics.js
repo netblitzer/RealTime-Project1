@@ -173,8 +173,10 @@ class Physics {
             // check to see if the other user is sunken
               // skip them if they are
           if (!other.sunken) {
-            const dx = ((gameData.a_x - other.a_x) ** 2);
-            const dy = ((gameData.a_y - other.a_y) ** 2);
+            let dx = (gameData.a_x - other.a_x);
+            dx *= dx;
+            let dy = (gameData.a_y - other.a_y);
+            dy *= dy;
             const dist = Math.sqrt(dx + dy);
 
             if (dist < 100) {
@@ -217,8 +219,12 @@ class Physics {
               obj2.dot = ((obj2.velDiff.x * obj2.posDiff.x) + (obj2.velDiff.y * obj2.posDiff.y));
 
                 // calculate sqrMag
-              obj1.sqrMag = (obj1.posDiff.x ** 2) + (obj1.posDiff.y ** 2);
-              obj2.sqrMag = (obj2.posDiff.x ** 2) + (obj2.posDiff.y ** 2);
+              dx = (obj1.posDiff.x * obj1.posDiff.x);
+              dy = (obj1.posDiff.y * obj1.posDiff.y);
+              obj1.sqrMag = dx + dy;
+              dx = (obj2.posDiff.x * obj2.posDiff.x);
+              dy = (obj2.posDiff.y * obj2.posDiff.y);
+              obj2.sqrMag = dx + dy;
 
                 // calculate final scaler
               obj1.scalar = (obj1.massScalar * obj1.dot) / obj1.sqrMag;
@@ -247,13 +253,17 @@ class Physics {
               };
 
                 // calculate forces required to change velocities
+              let dvx = (obj1.newVel.x * obj1.newVel.x);
+              let dvy = (obj1.newVel.y * obj1.newVel.y);
               obj1.df = {
-                x: 0.5 * gameData.physics.mass * (obj1.newVel.x ** 2) * obj1.dir.x,
-                y: 0.5 * gameData.physics.mass * (obj1.newVel.y ** 2) * obj1.dir.y,
+                x: 0.5 * gameData.physics.mass * dvx * obj1.dir.x,
+                y: 0.5 * gameData.physics.mass * dvy * obj1.dir.y,
               };
+              dvx = (obj2.newVel.x * obj2.newVel.x);
+              dvy = (obj2.newVel.y * obj2.newVel.y);
               obj2.df = {
-                x: 0.5 * other.physics.mass * (obj2.newVel.x ** 2) * obj2.dir.x,
-                y: 0.5 * other.physics.mass * (obj2.newVel.y ** 2) * obj2.dir.y,
+                x: 0.5 * other.physics.mass * dvx * obj2.dir.x,
+                y: 0.5 * other.physics.mass * dvy * obj2.dir.y,
               };
 
                 // add forces
