@@ -261,6 +261,11 @@
           accel: 0,
           accelDir: 1,
         };
+        const error = {
+          message: 'Room full.',
+          timer: 0,
+          fade: 0,
+        }
 
           // drawing method
         const redraw = () => {
@@ -325,7 +330,45 @@
             ctx.fillText(text, center.x - (size / 2), 350);
             
             ctx.restore();
-            
+              
+              // error message
+            if (error.timer > 0 || error.fade > 0) {
+              ctx.save();
+              
+              if (error.fade < 1 && error.timer >= 1) { 
+                error.fade += dT;
+                
+                if (error.fade >= 1) {
+                  error.fade = 1;
+                }
+              } else if (error.fade === 1 && error.timer > 0) {
+                error.timer -= dT;
+                
+                if (error.timer < 0) {
+                  error.timer = 0;
+                }
+              } else if (error.timer === 0 && error.fade > 0) {
+                error.fade -= dT;
+                
+                if (error.fade < 0) {
+                  error.fade = 0;
+                }
+              }
+              
+              ctx.globalAlpha = error.fade;
+
+              ctx.fillStyle = '#F66';
+              ctx.font = '20px Arial';
+              ctx.shadowColor = '#BBB';
+              ctx.shadowBlur = 10;
+
+              text = error.message;
+              size = ctx.measureText(text).width;
+
+              ctx.fillText(text, center.x - (size / 2), 420);
+
+              ctx.restore();
+            }
             
               // room name box
             ctx.save();
@@ -1025,6 +1068,9 @@
           slide.accel = 0;
           slide.fade = 0;
           
+          error.timer = 2;
+          error.fade = 0;
+          
           gameState = 'menuFadeIn';
         };
         
@@ -1144,9 +1190,6 @@
           
           center.wX = window.innerWidth / 2;
           center.wY = container.offsetTop - (container.clientHeight / 2);
-          
-          console.dir(container);
-          console.dir(center);
         };
         
         const getMouse = (e) => {

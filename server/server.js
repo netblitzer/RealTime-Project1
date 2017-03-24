@@ -223,11 +223,15 @@ const onJoined = (sock) => {
       if (rooms.private[data.room]) {
           // existing room, try to join
 
-        if (rooms.private[data.room].isFull) {
+        if (rooms.private[data.room].isFull()) {
             // if we're here, the player tried to join a full room
             // we'll tell them it was full and bump them out
               // send back the name of the room to let them know
+          console.log(`User tried to join a room at capacity: ${
+                      rooms.private[data.room].getUserCount()
+                      }/5`);
           socket.emit('fullRoom', { name: data.room });
+          return;
         }
       } else {
           // room doesn't exist, create it and add the user
@@ -288,7 +292,8 @@ const onLeave = (sock) => {
   const socket = sock;
 
   socket.on('leftRoom', () => {
-    if (socket.userData === undefined) {
+    if (socket.userData === undefined ||
+       socket.userData.info.room === undefined) {
       console.log(`${socket.id} left the room with no data`);
       return;
     }
@@ -341,7 +346,8 @@ const onDisconnect = (sock) => {
   const socket = sock;
 
   socket.on('disconnect', () => {
-    if (socket.userData === undefined || socket.userData.info === undefined) {
+    if (socket.userData === undefined || socket.userData.info === undefined ||
+       socket.userData.info.room === undefined) {
       console.log(`${socket.id} disconnected with no data`);
       return;
     }
