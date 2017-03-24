@@ -102,13 +102,13 @@ const findRandomRoom = () => {
 //      | |_id
 //      | |_name
 //      | |_color
+//      | |_private
 //      | \_room
 //      |_gameData      stores user's synched game information (transferred constantly)
 //      | |               gets transferred by the server to the clients
 //      | |_physics     not transferred, serverside physics information
 //      | | |_forces
 //      | | |_acceleration
-//      | | |_direction
 //      | | |_velocity
 //      | | |_friction
 //      | | \_masss
@@ -119,19 +119,28 @@ const findRandomRoom = () => {
 //      | |_b_y
 //      | |_c_x
 //      | |_c_y
-//      | \_colliding
-//      \_clientData    stores user's client game information (transferred once)
-//        |_movement      not transferred
-//        | |               gets updated by the clients messages back to the server
-//        | |_sink
-//        | |_boost
-//        | |_up
-//        | |_down
-//        | |_left
-//        | \_right
-//        |_alpha
-//        |_x
-//        \_y
+//      | |_colliding
+//      | |_boosting
+//      | |_sunken
+//      | |_sinking
+//      | \_sinkProgress
+//      |_clientData    stores user's client game information (transferred once)
+//      | |_movement      not transferred
+//      | | |               gets updated by the clients messages back to the server
+//      | | |_sink
+//      | | |_boost
+//      | | |_up
+//      | | |_down
+//      | | |_left
+//      | | \_right
+//      | |_alpha
+//      | |_x
+//      | \_y
+//      \_serverData    stores timing properties on the user abilities
+//        |_boostTimer
+//        |_boostRefreshTimer
+//        |_sinkTimer
+//        \_sinkRefreseTimer
 
 // * Input structure * //
 //    data
@@ -153,110 +162,162 @@ const onJoined = (sock) => {
   const socket = sock;
 
   // data object should come with
-    // name: string of the chosen name (optional)
     // room: string of the chosen room (optional)
-  // socket.on('join', (data) => {
-    // new user to set up and join
-  const newUser = { };
+  socket.on('join', (data) => {
+      // new user to set up and join
+    const newUser = { };
 
-    // information about the user that stays the same throughout their time in the room
-      // this is info like their name and color
-      // this info only gets transferred once to each member of the room
-  newUser.info = { };
+      // information about the user that stays the same throughout their time in the room
+        // this is info like their name and color
+        // this info only gets transferred once to each member of the room
+    newUser.info = { };
 
-    // information about the user that changes throughout the game
-      // this info gets transferred all the time once the game starts
-  newUser.gameData = { };
+      // information about the user that changes throughout the game
+        // this info gets transferred all the time once the game starts
+    newUser.gameData = { };
 
-    // information about the user that affects game data
-      // this info only gets transferred once, but affects the game data
-      // things in this object change clientside, but aren't corrected by the server
-  newUser.clientData = { };
+      // information about the user that affects game data
+        // this info only gets transferred once, but affects the game data
+        // things in this object change clientside, but aren't corrected by the server
+    newUser.clientData = { };
 
-    // set the id of the user (should always be unique)
-  newUser.info.id = socket.id;
+      // set the id of the user (should always be unique)
+    newUser.info.id = socket.id;
 
-    // set "unique" name if they don't have one
-//    if (!data.name) {
-  newUser.info.name = utils.randName(socket.id);
-//    } else {
-//      newUser.info.name = data.name;
-//    }
+      // set "unique" name
+    newUser.info.name = utils.randName(socket.id);
 
-    // assign them a random color for now
-  newUser.info.color = utils.randCol();
+      // assign them a random color for now
+    newUser.info.color = utils.randCol();
 
-    // set some stuff that will change clientside but never be transferred again
-  newUser.clientData.alpha = 0.05;
-  newUser.clientData.x = 0;
-  newUser.clientData.y = 0;
+      // set some stuff that will change clientside but never be transferred again
+    newUser.clientData.alpha = 0.05;
+    newUser.clientData.x = 0;
+    newUser.clientData.y = 0;
 
-    // set the game data
-  newUser.gameData.lastUpdate = time.getTime();
-    // using three frame lerping
-  newUser.gameData.a_x = 100;
-  newUser.gameData.a_y = 100;
-  newUser.gameData.b_x = 100;
-  newUser.gameData.b_y = 100;
-  newUser.gameData.c_x = 100;
-  newUser.gameData.c_y = 100;
-    // add a collision flag
-  newUser.gameData.colliding = false;
-    // add ability flags
-  newUser.gameData.boosting = false;
-  newUser.gameData.sunken = false;
-  newUser.gameData.sinking = false;
-  newUser.gameData.sinkProgress = 0;
+      // set the game data
+    newUser.gameData.lastUpdate = time.getTime();
+      // using three frame lerping
+    newUser.gameData.a_x = 100;
+    newUser.gameData.a_y = 100;
+    newUser.gameData.b_x = 100;
+    newUser.gameData.b_y = 100;
+    newUser.gameData.c_x = 100;
+    newUser.gameData.c_y = 100;
+      // add a collision flag
+    newUser.gameData.colliding = false;
+      // add ability flags
+    newUser.gameData.boosting = false;
+    newUser.gameData.sunken = false;
+    newUser.gameData.sinking = false;
+    newUser.gameData.sinkProgress = 0;
+
+      // assign the data to the socket
+    socket.userData = newUser;
+
+      // assign the user the requested room
+        // if they didn't send a room, join a random one
+    if (data.room.length > 0) {
+        // try to get the user into a private room
+
+      if (rooms.private[data.room]) {
+          // existing room, try to join
+
+        if (rooms.private[data.room].isFull) {
+            // if we're here, the player tried to join a full room
+            // we'll tell them it was full and bump them out
+              // send back the name of the room to let them know
+          socket.emit('fullRoom', { name: data.room });
+        }
+      } else {
+          // room doesn't exist, create it and add the user
+
+        rooms.private[data.room] = new Room(data.room, io);
+      }
+        // add the user to the room we found or created
+      newUser.info.room = data.room;
+      newUser.info.private = true;
+      rooms.private[data.room].addUser(socket);
+
+        // call the physics start method
+      rooms.private[data.room].startPhysics();
+    } else {
+        // no specified room, join a random public one
+      const roomToJoin = findRandomRoom();
+      newUser.info.room = roomToJoin;
+      newUser.info.private = false;
+      rooms.public[roomToJoin].addUser(socket);
+
+        // call the physics start method
+      rooms.public[roomToJoin].startPhysics();
+    }
+
+      // final steps
+    socket.userData.clientData.movement = {
+      boost: false,
+      sink: false,
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+    };
+
+    socket.userData.gameData.physics = {
+      forces: { x: 0, y: 0 },
+      acceleration: { x: 0, y: 0 },
+      velocity: { x: 250, y: 250 },  // initialize the velocity so we fly out
+      friction: 3,   // between 1 and 5
+      mass: 1,
+    };
+
+      // create a server data section on the user
+        // used for timing purposes on the abilities
+    socket.userData.serverData = {
+      boostTimer: 0,
+      boostRefreshTimer: 0,
+      sinkTimer: 0,
+      sinkRefreshTimer: 0,
+    };
 
 
-    // assign the user a random room
-      // later we'll assign them a room based on where they wanted to go
-      // this will send the 'joined' message to the user
-  const roomToJoin = findRandomRoom();
-  newUser.info.room = roomToJoin;
-  socket.userData = newUser;
-  rooms.public[roomToJoin].addUser(socket);
-
-    // final steps
-  socket.userData.clientData.movement = {
-    boost: false,
-    sink: false,
-    up: false,
-    down: false,
-    left: false,
-    right: false,
-  };
-
-  socket.userData.gameData.physics = {
-    forces: { x: 0, y: 0 },
-    acceleration: { x: 0, y: 0 },
-    direction: { x: 0, y: 0 },
-    velocity: { x: 0, y: 0 },
-    friction: 3,   // set as a percent out of 100
-    mass: 1,
-  };
-
-    // create a server data section on the user
-      // used for timing purposes on the abilities
-  socket.userData.serverData = {
-    boostTimer: 0,
-    boostRefreshTimer: 0,
-    sinkTimer: 0,
-    sinkRefreshTimer: 0,
-  };
-
-  rooms.public[roomToJoin].startPhysics();
-
-  console.log(`${newUser.info.name} joined ${newUser.info.room}`);
+    console.log(`${newUser.info.name} joined ${newUser.info.room}`);
+  });
 };
 
-// * Emote Handler * //
-  // This handler triggers when a player emotes in the game
-const onEmote = (sock) => {
+const onLeave = (sock) => {
   const socket = sock;
 
-  socket.on('emote', () => {
+  socket.on('leftRoom', () => {
+    if (socket.userData === undefined) {
+      console.log(`${socket.id} left the room with no data`);
+      return;
+    }
 
+    if (socket.userData.info.private) {
+        // user was in a private room
+      const status = rooms.private[socket.userData.info.room].removeUser(socket);
+
+      console.log(`${socket.userData.info.name} left the room`);
+      console.log(`Users left in room: ${rooms.private[socket.userData.info.room].getUserCount()}`);
+
+      if (status === 0) {
+        rooms.private[socket.userData.info.room].stopPhysics();
+        delete rooms.private[socket.userData.info.room];
+        console.log(`Deleting room ${socket.userData.info.room}`);
+      }
+    } else {
+        // user in a public room
+      const status = rooms.public[socket.userData.info.room].removeUser(socket);
+
+      console.log(`${socket.userData.info.name} left the room`);
+      console.log(`Users left in room: ${rooms.public[socket.userData.info.room].getUserCount()}`);
+
+      if (status === 0) {
+        rooms.public[socket.userData.info.room].stopPhysics();
+        delete rooms.public[socket.userData.info.room];
+        console.log(`Deleting room ${socket.userData.info.room}`);
+      }
+    }
   });
 };
 
@@ -280,20 +341,35 @@ const onDisconnect = (sock) => {
   const socket = sock;
 
   socket.on('disconnect', () => {
-    if (socket.userData === null) {
+    if (socket.userData === undefined || socket.userData.info === undefined) {
       console.log(`${socket.id} disconnected with no data`);
       return;
     }
 
-    const status = rooms.public[socket.userData.info.room].removeUser(socket);
+    if (socket.userData.info.private) {
+        // user was in a private room
+      const status = rooms.private[socket.userData.info.room].removeUser(socket);
 
-    console.log(`${socket.userData.info.name} disconnected and left the room`);
-    console.log(`Users left in room: ${rooms.public[socket.userData.info.room].getUserCount()}`);
+      console.log(`${socket.userData.info.name} disconnected and left the room`);
+      console.log(`Users left in room: ${rooms.private[socket.userData.info.room].getUserCount()}`);
 
-    if (status === 0) {
-      rooms.public[socket.userData.info.room].stopPhysics();
-      delete rooms.public[socket.userData.info.room];
-      console.log(`Deleting room ${socket.userData.info.room}`);
+      if (status === 0) {
+        rooms.private[socket.userData.info.room].stopPhysics();
+        delete rooms.private[socket.userData.info.room];
+        console.log(`Deleting room ${socket.userData.info.room}`);
+      }
+    } else {
+        // user in a public room
+      const status = rooms.public[socket.userData.info.room].removeUser(socket);
+
+      console.log(`${socket.userData.info.name} disconnected and left the room`);
+      console.log(`Users left in room: ${rooms.public[socket.userData.info.room].getUserCount()}`);
+
+      if (status === 0) {
+        rooms.public[socket.userData.info.room].stopPhysics();
+        delete rooms.public[socket.userData.info.room];
+        console.log(`Deleting room ${socket.userData.info.room}`);
+      }
     }
   });
 };
@@ -309,8 +385,8 @@ const onInput = (sock) => {
 io.sockets.on('connection', (socket) => {
   console.log('Connection started');
 
+  onLeave(socket);
   onJoined(socket);
-  onEmote(socket);
   onMove(socket);
   onInput(socket);
   onDisconnect(socket);

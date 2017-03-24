@@ -4,7 +4,7 @@ class Room {
 
   constructor(name, _io) {
     this.name = name;
-    this.maxSize = 4; // Max users allowed
+    this.maxSize = 5; // Max users allowed
     this.users = {};
     this.usersData = {};
     this.currentUsers = 0;

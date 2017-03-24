@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Syncing Data 2</title>
+    <title>Knick-Knacks Game</title>
     <meta charset="utf-8"/>
     <style>
       html, body {
@@ -11,17 +11,27 @@
         padding:0;
         overflow: hidden;
         
+        background: #99AA88;
+        box-shadow: inset 0 0 100px #333;
+      }
+      
+      #canvasContainer {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100vw;
+        max-width: 900px;
+        height: 100vh;
+        max-height: 900px;
+        
         background: #BBDDAA;
       }
       
       canvas {
+        padding: 0;
         margin: 0;
-      }
-      
-      p {
-        margin-left: 12px;
-        font-size: 1.2em;
-        width: 50%; 
+        box-shadow: 0 0 70px #333;
       }
     </style>
     <script src="/socket.io/socket.io.js"></script>
@@ -32,7 +42,10 @@
           // drawing data
         let canvas;
         let ctx;
-        let center;
+        const center = {
+          x: 0,
+          y: 0,
+        };
 
           // connection data
         let socket;
@@ -49,17 +62,20 @@
           down: false,
           left: false,
           right: false,
-        }
-        let moveDown = false;
-        let moveUp = false;
-        let moveRight = false;
-        let moveLeft = false;
-        let boost = false;
+        };
 
           // game data
-        let gameState = 'playing';
+        let gameState = 'menuFadeIn';
+        let lastTime = 0;
+        let dT = 0;
+        const mouse = {
+          x: 0,
+          y: 0,
+          clicked: false,
+        };
 
         
+          // handler for when a player leaves the room
         const removeUser = (response) => {
           console.dir(response);
           if (users[response.user.info.id]) {
@@ -67,6 +83,7 @@
           }
         };
 
+          // handler for when another player joins the room
         const addUser = (response) => {
           if (response === undefined) {
             return;
@@ -77,6 +94,7 @@
           }
         };
         
+          // handler for when the player joins the room
         const joinRoom = (data) => {
           // set the user
           id = data.self.info.id;
@@ -88,9 +106,28 @@
             users[data.others[keys[i]].info.id] = data.others[keys[i]];
           }
           
-          requestAnimationFrame(redraw);
+            // slide out of the loading screen
+          gameState = 'loadSlideOut';
         };
         
+          // function to leave the room we're currently in
+        const leaveRoom = () => {
+          
+          users = {};
+          
+          roomName.text = '';
+          
+          slide.menu = 0;
+          slide.loading = 0;
+          slide.accel = 0;
+          slide.fade = 0;
+          
+          gameState = 'menuFadeIn';
+          
+          socket.emit('leftRoom', { id: id });
+        };
+          
+          // DEPRECIATED
         const update = (response) => {
           
           if (response.info.id === id) {
@@ -116,6 +153,7 @@
         };
 
 
+          // handler for when the server updates physics
         const updateData = (response) => {
           //console.log(response);
           
@@ -155,6 +193,7 @@
         }
 
         
+          // DEPRECIATED
         const updatePosition = () => {
           const self = users[id];
           
@@ -181,203 +220,974 @@
           //socket.emit('moveSend', {info: {id: id}, gameData: users[id].gameData} );
         };
 
+          // DEPRECIATED
         const lerp2 = (v0, v1, alpha) => {
           return (1 - alpha) * v0 + alpha * v1;
         };
 
+          // three frame lerp function
         const lerp3 = (v0, v1, v2, alpha) => {
           return (((1 - alpha) * ((1 - alpha) * v0 + alpha * v1)) + (((1 - alpha) * v1 + v2 * alpha) * alpha));
         };
         
 
+          // variables for the various screens        
+        const roomName = {
+          active: 0, // 0 for inactive, 1 for hover, 2 for clicked, 3 for active
+          brightness: 0,
+          timer: 0,
+          text: '',
+        };
+        const joinButton = {
+          active: 0, // 0 for inactive, 1 for hover, 2 for clicked
+          scale: 0,
+        };
+        const colorShiftLeft = {
+          active: 0, // 0 for inactive, 1 for hover, 2 for clicked
+          scale: 0,
+        };
+        const colorShiftRight = {
+          active: 0, // 0 for inactive, 1 for hover, 2 for clicked
+          scale: 0,
+        };
+        const slide = {
+          menu: 0,
+          loading: 0,
+          accel: 0,
+          fade: 0,
+        };
+        const load = {
+          progress: 0,
+          accel: 0,
+          accelDir: 1,
+        };
+
           // drawing method
-        const redraw = (time) => {
-
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const redraw = () => {
           
-          //ctx.fillStyle = '#BBDDAA';
-          //ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // time info
+          const time = new Date();
+          const curTime = time.getTime();
+          dT = (curTime - lastTime) / 1000;
+          lastTime = curTime;
 
-          const keys = Object.keys(users);
-
-          for (let i = 0; i < keys.length; i++) {
-            const user = users[keys[i]];
+            // drawing operations
+          if (gameState === 'menu') {
             
-            if (user.clientData.alpha < 1) {
-              user.clientData.alpha += 0.05;
+              // check for mouse interactions
+                // room name box
+            if (mouse.x > (center.wX - 140) && mouse.x < (center.wX + 140) && mouse.y > (center.wY + 430) && mouse.y < (center.wY + 470)) {
+              if (mouse.clicked && roomName.active != 2 && roomName.active != 3) {
+                roomName.active = 2;
+              } else if (!mouse.clicked && roomName.active === 2) {
+                roomName.active = 3;
+              } else if (roomName.active != 2 && roomName.active != 3) {
+                roomName.active = 1;
+              }
+            } else if (roomName.active === 1 || roomName.active === 2) {
+              roomName.active = 0;
+            } else if (mouse.clicked) {
+              roomName.active = 0;
+              roomName.timer = 0;
+            }
+                // join button
+            if (mouse.x > (center.wX - 130) && mouse.x < (center.wX + 130) && mouse.y > (center.wY + 490) && mouse.y < (center.wY + 530)) {
+              if (mouse.clicked) {
+                joinButton.active = 2;
+              } else if (!mouse.clicked) {
+                if (joinButton.active === 2) {
+                  gameState = 'menuSlide';
+                  joinButton.active = 0;
+                  roomName.active = 0;
+                }                
+                joinButton.active = 1;
+              }
+            } else {
+              joinButton.active = 0;
+            }
+            
+              // clear current canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+              
+              // title
+            ctx.save();
+            
+            ctx.fillStyle = '#FFF';
+            ctx.font = '100px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            let text = 'Knick-Knacks';
+            let size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 350);
+            
+            ctx.restore();
+            
+            
+              // room name box
+            ctx.save();
+            
+            let col = Math.floor(238 + 17 * roomName.brightness);
+            ctx.font = '30px Consolas';
+            ctx.shadowColor = '#777';
+            
+            if (roomName.active === 0) {  // not hovered
+              ctx.fillStyle = 'rgb(' + col + ',' + col + ',' + col + ')';
+              
+              ctx.fillRect(center.x - 140, 430, 280, 40);
+              
+              ctx.fillStyle = '#AAA';
+              ctx.shadowBlur = 0;
+              
+              if (roomName.text.length > 0) {
+                text = roomName.text;
+              } else {
+                text = 'Room Name';
+              }
+              
+              ctx.fillText(text, center.x - 130, 460);
+              
+              if (roomName.brightness > 0) {
+                roomName.brightness -= (dT * 3);
+              } else {
+                roomName.brightness = 0;
+              }
+              
+            } else if (roomName.active === 1 || roomName.active === 2) { // hovered or clicked
+              ctx.fillStyle = 'rgb(' + col + ',' + col + ',' + col + ')';
+              
+              ctx.fillRect(center.x - 140, 430, 280, 40);
+              
+              ctx.fillStyle = '#AAA';
+              ctx.shadowBlur = 0;
+              
+              if (roomName.text.length > 0) {
+                text = roomName.text;
+              } else {
+                text = 'Room Name';
+              }
+              
+              ctx.fillText(text, center.x - 130, 460);
+              
+              if (roomName.brightness < 1) {
+                roomName.brightness += (dT * 3);
+              } else {
+                roomName.brightness = 1;
+              }
+              
+            } else if (roomName.active === 3) { // selected
+              ctx.fillStyle = 'rgb(' + col + ',' + col + ',' + col + ')';
+              ctx.shadowColor = '#777';
+              
+              ctx.fillRect(center.x - 140, 430, 280, 40);
+              
+              ctx.fillStyle = '#AAA';
+              ctx.shadowBlur = 0;
+              
+              size = ctx.measureText(roomName.text).width;
+              
+              ctx.fillText(roomName.text, center.x - 130, 460);
+              
+              roomName.timer += dT;
+              
+              if (roomName.timer < 0.5) {
+                ctx.fillRect(center.x - 130 + size + 2, 434, 2, 32);
+              } else if (roomName.timer > 1) {
+                roomName.timer = 0;
+              }
+              
+              if (roomName.brightness < 1) {
+                roomName.brightness += dT;
+              } else {
+                roomName.brightness = 1;
+              }
+            }
+            ctx.restore();
+            
+            
+              // join button
+            ctx.save();
+            
+            ctx.font = '50px Arial';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#BBB';
+              
+            text = 'Join Game';
+            size = ctx.measureText(text).width;
+            
+            col = Math.floor(238 + 17 * joinButton.scale);
+            ctx.fillStyle = 'rgb(' + col + ',' + col + ',' + col + ')';
+            if (joinButton.active === 0) {
+              
+              ctx.fillText(text, center.x - (size / 2), 530);
+              
+              if (joinButton.scale > 0) {
+                joinButton.scale -= (dT * 3);
+              } else {
+                joinButton.scale = 0;
+              }
+            } else if (joinButton.active === 1) {
+              
+              ctx.fillText(text, center.x - (size / 2), 530);
+              
+              if (joinButton.scale < 0) {
+                joinButton.scale = 0;
+              }
+              
+              if (joinButton.scale < 1) {
+                joinButton.scale += (dT * 3);
+              } else {
+                joinButton.scale = 1;
+              }
+            } else if (joinButton.active === 2) {
+              
+              ctx.fillText(text, center.x - (size / 2), 530);
+              
+              joinButton.scale = -8;
+            }
+            ctx.restore();
+            
+              // instructions
+            ctx.save();
+            
+            ctx.fillStyle = '#EEE';
+            ctx.font = '20px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            text = 'WASD or Arrow Keys to move.';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 750);
+            
+            text = 'Shift to boost. Space to sink. Escape to go back to the menu';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 780);
+            
+            ctx.restore();
+            
+              // credit
+            ctx.save();
+            
+            ctx.fillStyle = '#EEE';
+            ctx.font = '20px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            text = 'Created by Luke Miller.';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 885);
+            
+            ctx.restore();
+            
+            ctx.restore();
+            
+            
+          } else if (gameState === 'menuSlide') {
+              // add to slide
+            if (slide.menu < 960) {
+              slide.accel += dT;
+              slide.menu += 7 * slide.accel;
+              
+              if (slide.menu >= 960) {
+                slide.loading = -960;
+                slide.menu = 960;
+                slide.accel = 2.9;
+                gameState = 'loadSlideIn';
+              }
+            }
+            
+              // clear current canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+              
+              // title
+            ctx.save();
+            
+            ctx.fillStyle = '#FFF';
+            ctx.font = '100px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            let text = 'Knick-Knacks';
+            let size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2) - slide.menu, 350);
+            
+            ctx.restore();
+            
+            
+              // room name box
+            ctx.save();
+            
+            ctx.font = '30px Consolas';
+            ctx.shadowColor = '#777';
+            ctx.fillStyle = '#EEE';
+
+            ctx.fillRect(center.x - 140 - slide.menu, 430, 280, 40);
+
+            ctx.fillStyle = '#AAA';
+            ctx.shadowBlur = 0;
+
+            if (roomName.text.length > 0) {
+              text = roomName.text;
+            } else {
+              text = 'Room Name';
+            }
+              
+            ctx.fillText(text, center.x - 130 - slide.menu, 460);
+            
+            ctx.restore();
+            
+            
+              // join button
+            ctx.save();
+            
+            ctx.font = '50px Arial';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#BBB';
+              
+            text = 'Join Game';
+            size = ctx.measureText(text).width;
+            ctx.fillStyle = '#EEE';
+              
+            ctx.fillText(text, center.x - (size / 2) - slide.menu, 530);
+            
+            ctx.restore();
+            
+              // instructions
+            ctx.save();
+            
+            ctx.fillStyle = '#EEE';
+            ctx.font = '20px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            text = 'WASD or Arrow Keys to move.';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2) - slide.menu, 750);
+            
+            text = 'Shift to boost. Space to sink. Escape to go back to the menu';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2) - slide.menu, 780);
+            
+            ctx.restore();
+            
+              // credit
+            ctx.save();
+            
+            ctx.fillStyle = '#EEE';
+            ctx.font = '20px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            text = 'Created by Luke Miller.';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2) - slide.menu, 885);
+            
+            ctx.restore();
+            
+            ctx.restore();
+            
+            
+          } else if (gameState === 'menuFadeIn') {
+              // add to fade
+            if (slide.fade < 1 && dT < 1000000000) {  // second condition to not instantly fade in on first frame
+              slide.fade += (dT / 2);
+              
+              if (slide.fade > 1) {
+                slide.fade = 1;
+                gameState = 'menu';
+              }
+            }
+              // clear current canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            
+            ctx.globalAlpha = slide.fade;
+            
+              // title
+            ctx.save();
+            
+            ctx.fillStyle = '#FFF';
+            ctx.font = '100px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            let text = 'Knick-Knacks';
+            let size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 350);
+            
+            ctx.restore();
+            
+            
+              // room name box
+            ctx.save();
+            
+            ctx.font = '30px Consolas';
+            ctx.shadowColor = '#777';
+            ctx.fillStyle = '#EEE';
+
+            ctx.fillRect(center.x - 140, 430, 280, 40);
+
+            ctx.fillStyle = '#AAA';
+            ctx.shadowBlur = 0;
+
+            if (roomName.text.length > 0) {
+              text = roomName.text;
+            } else {
+              text = 'Room Name';
+            }
+              
+            ctx.fillText(text, center.x - 130, 460);
+            
+            ctx.restore();
+            
+            
+              // join button
+            ctx.save();
+            
+            ctx.font = '50px Arial';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#BBB';
+              
+            text = 'Join Game';
+            size = ctx.measureText(text).width;
+            ctx.fillStyle = '#EEE';
+              
+            ctx.fillText(text, center.x - (size / 2), 530);
+            
+            ctx.restore();
+            
+              // instructions
+            ctx.save();
+            
+            ctx.fillStyle = '#EEE';
+            ctx.font = '20px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            text = 'WASD or Arrow Keys to move.';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 750);
+            
+            text = 'Shift to boost. Space to sink. Escape to go back to the menu';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 780);
+            
+            ctx.restore();
+            
+              // credit
+            ctx.save();
+            
+            ctx.fillStyle = '#EEE';
+            ctx.font = '20px Arial';
+            ctx.shadowColor = '#BBB';
+            ctx.shadowBlur = 10;
+            
+            text = 'Created by Luke Miller.';
+            size = ctx.measureText(text).width;
+            
+            ctx.fillText(text, center.x - (size / 2), 885);
+            
+            ctx.restore();
+            
+            ctx.restore();
+            
+          } else if (gameState === 'loadSlideIn') {
+              // clear current canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+              // add to slide
+            if (slide.loading < 0) {
+              slide.accel -= dT;
+              
+                // make sure that the acceleration never drops to 0
+              if (slide.accel <= 0) {
+                slide.accel += 0.1;
+              }
+              
+              slide.loading += 7 * slide.accel;
+              
+              if (slide.loading >= 0) {
+                slide.loading = 0;
+                slide.accel = 0;
+                gameState = 'load';
+                
+                  // send the join call now that the loading screen is up
+                socket.emit('join', { room: roomName.text } );
+              }
+            }
+            
+              // do the spin progress
+            if (dT < 10) {  // make sure we don't have crazy high dTs
+              load.progress += load.accel;
+              if (load.progress > 2) {
+                load.progress %= 2;
+              }
+
+              if (load.accelDir === 1) {
+                load.accel += (dT / 40);
+
+                if (load.accel > 0.05) {
+                  load.accelDir = -1;
+                }
+              } else if (load.accelDir === -1) {
+                load.accel -= (dT / 40);
+
+                if (load.accel < -0.05) {
+                  load.accelDir = 1;
+                }
+              }
             }
             
             ctx.save();
             
-            ctx.fillStyle = user.info.color;
-            ctx.globalAlpha = 1;
-            
-            user.clientData.x = 80 + lerp3(user.gameData.c_x, user.gameData.b_x, user.gameData.a_x, user.clientData.alpha);
-            user.clientData.y = 80 + lerp3(user.gameData.c_y, user.gameData.b_y, user.gameData.a_y, user.clientData.alpha);
-            
-            
-          //  user.clientData.x = lerp2(user.gameData.c_x, user.gameData.a_x, user.clientData.alpha);
-          //  user.clientData.y = lerp2(user.gameData.c_y, user.gameData.a_y, user.clientData.alpha);
-            
-            
-            if (user.gameData.sinkProgress > 0 && !user.gameData.boosting) {
-              ctx.globalCompositeOperation = 'destination-over';
-            }
-            
-            if (user.gameData.sinkProgress > 0 && !user.gameData.boosting) {
-              ctx.save();
-
-              ctx.fillStyle = 'black';
-              ctx.globalAlpha = 0.6 * user.gameData.sinkProgress;
+            // loading text
+            ctx.font = '25px Arial';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#BBB';
               
-              ctx.beginPath();
-              ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
-              ctx.closePath();
-              ctx.fill();
-              ctx.restore();
-            }
-            
-            if (user.gameData.boosting) {
-              ctx.save();
-
-              ctx.fillStyle = 'white';
-              ctx.globalAlpha = 0.2;
+            const text = 'Loading';
+            const size = ctx.measureText(text).width;
+            ctx.fillStyle = '#FFF';
               
-              ctx.beginPath();
-              ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
-              ctx.closePath();
-              ctx.fill();
-              ctx.restore();
-            }
+            ctx.fillText(text, center.x - (size / 2) - slide.loading, 450);
             
-            
-            if (user.gameData.boosting) {
-              ctx.globalCompositeOperation = 'lighten';
-            }
+            ctx.lineWidth = 15;
+            ctx.strokeStyle = '#FFF';
+            ctx.shadowColor = '#888';
             
             ctx.beginPath();
-            ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
-            ctx.closePath();
-            ctx.fill();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 2), Math.PI * (load.progress - 1.6), false);
+            ctx.stroke();
             
-            ctx.restore();
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 1.5), Math.PI * (load.progress - 1.1), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 1), Math.PI * (load.progress - 0.6), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 0.5), Math.PI * (load.progress - 0.1), false);
+            ctx.stroke();
+            
+            
+            ctx.restore(); 
+            
+          } else if (gameState === 'loadSlideOut') {
+              // clear current canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+              // add to slide
+            if (slide.loading < 960) {
+              slide.accel += dT;
+              slide.loading += 7 * slide.accel;
+              
+              if (slide.loading >= 960) {
+                slide.loading = -960;
+                slide.menu = 0;
+                gameState = 'playing';
+              }
+            }
+            
+              // do the spin progress
+            if (dT < 10) {  // make sure we don't have crazy high dTs
+              load.progress += load.accel;
+              if (load.progress > 2) {
+                load.progress %= 2;
+              }
+
+              if (load.accelDir === 1) {
+                load.accel += (dT / 40);
+
+                if (load.accel > 0.05) {
+                  load.accelDir = -1;
+                }
+              } else if (load.accelDir === -1) {
+                load.accel -= (dT / 40);
+
+                if (load.accel < -0.05) {
+                  load.accelDir = 1;
+                }
+              }
+            }
+            
+            ctx.save();
+            
+            // loading text
+            ctx.font = '25px Arial';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#BBB';
+              
+            const text = 'Loading';
+            const size = ctx.measureText(text).width;
+            ctx.fillStyle = '#FFF';
+              
+            ctx.fillText(text, center.x - (size / 2) - slide.loading, 450);
+            
+            ctx.lineWidth = 15;
+            ctx.strokeStyle = '#FFF';
+            ctx.shadowColor = '#888';
+            
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 2), Math.PI * (load.progress - 1.6), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 1.5), Math.PI * (load.progress - 1.1), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 1), Math.PI * (load.progress - 0.6), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x - slide.loading, 441, 65, Math.PI * (load.progress - 0.5), Math.PI * (load.progress - 0.1), false);
+            ctx.stroke();
+            
+            
+            ctx.restore(); 
+            
+          } else if (gameState === 'load') {
+              // clear current canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+              // do the spin progress
+            if (dT < 10) {  // make sure we don't have crazy high dTs
+              load.progress += load.accel;
+              if (load.progress > 2) {
+                load.progress %= 2;
+              }
+
+              if (load.accelDir === 1) {
+                load.accel += (dT / 40);
+
+                if (load.accel > 0.05) {
+                  load.accelDir = -1;
+                }
+              } else if (load.accelDir === -1) {
+                load.accel -= (dT / 40);
+
+                if (load.accel < -0.05) {
+                  load.accelDir = 1;
+                }
+              }
+            }
+            
+            ctx.save();
+            
+            // loading text
+            ctx.font = '25px Arial';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#BBB';
+              
+            const text = 'Loading';
+            const size = ctx.measureText(text).width;
+            ctx.fillStyle = '#FFF';
+              
+            ctx.fillText(text, center.x - (size / 2), 450);
+            
+            ctx.lineWidth = 15;
+            ctx.strokeStyle = '#FFF';
+            ctx.shadowColor = '#888';
+            
+            ctx.beginPath();
+            ctx.arc(center.x, 441, 65, Math.PI * (load.progress - 2), Math.PI * (load.progress - 1.6), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x, 441, 65, Math.PI * (load.progress - 1.5), Math.PI * (load.progress - 1.1), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x, 441, 65, Math.PI * (load.progress - 1), Math.PI * (load.progress - 0.6), false);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(center.x, 441, 65, Math.PI * (load.progress - 0.5), Math.PI * (load.progress - 0.1), false);
+            ctx.stroke();
+            
+            
+            ctx.restore();            
+            
+          } else if (gameState === 'playing') {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            //ctx.fillStyle = '#BBDDAA';
+            //ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const keys = Object.keys(users);
+
+            for (let i = 0; i < keys.length; i++) {
+              const user = users[keys[i]];
+
+              if (user.clientData.alpha < 1) {
+                user.clientData.alpha += 0.05;
+              }
+
+              ctx.save();
+
+              ctx.fillStyle = user.info.color;
+              ctx.globalAlpha = 1;
+
+              user.clientData.x = 50 + lerp3(user.gameData.c_x, user.gameData.b_x, user.gameData.a_x, user.clientData.alpha);
+              user.clientData.y = 50 + lerp3(user.gameData.c_y, user.gameData.b_y, user.gameData.a_y, user.clientData.alpha);
+
+
+            //  user.clientData.x = lerp2(user.gameData.c_x, user.gameData.a_x, user.clientData.alpha);
+            //  user.clientData.y = lerp2(user.gameData.c_y, user.gameData.a_y, user.clientData.alpha);
+
+
+              if (user.gameData.sinkProgress > 0 && !user.gameData.boosting) {
+                ctx.globalCompositeOperation = 'destination-over';
+              }
+
+              if (user.gameData.sinkProgress > 0 && !user.gameData.boosting) {
+                ctx.save();
+
+                ctx.fillStyle = 'black';
+                ctx.globalAlpha = 0.6 * user.gameData.sinkProgress;
+
+                ctx.beginPath();
+                ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+              }
+
+              if (user.gameData.boosting) {
+                ctx.save();
+
+                ctx.fillStyle = 'white';
+                ctx.globalAlpha = 0.2;
+
+                ctx.beginPath();
+                ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+                
+                /*
+                const diff = {
+                  x: user.gameData.a_x - user.gameData.c_x,
+                  y: user.gameData.a_y - user.gameData.c_y,
+                };
+                
+                ctx.save();
+                
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(user.clientData.x - (diff.x * 200), user.clientData.y - (diff.y * 200), 50, 0, Math.PI * 2, false);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+                */
+              }
+
+
+              if (user.gameData.boosting) {
+                ctx.globalCompositeOperation = 'lighten';
+              }
+
+              ctx.beginPath();
+              ctx.arc(user.clientData.x, user.clientData.y, 50, 0, Math.PI * 2, false);
+              ctx.closePath();
+              ctx.fill();
+
+              ctx.restore();
+            }
           }
-          
-          ctx.fillStyle = '#99AA88';
-          ctx.fillRect(0, 0, 30, 960);
-          ctx.fillRect(30, 0, 960, 30);
-          ctx.fillRect(30, 930, 960, 960);
-          ctx.fillRect(930, 30, 960, 930);
 
           requestAnimationFrame(redraw);
-          //console.debug(users);
+        };
+
+        const roomFull = (data) => {
+          roomName.text = '';
+          
+          slide.menu = 0;
+          slide.loading = 0;
+          slide.accel = 0;
+          slide.fade = 0;
+          
+          gameState = 'menuFadeIn';
         };
         
+        let shift = false;
 
         const keyDownHandler = (e) => {
           var keyPressed = e.which;
 
-          // W OR UP
-          if(keyPressed === 87 || keyPressed === 38) {
-            movement.up = true;
+          if (gameState === 'menu' && roomName.active === 3) {
+            
+            if (keyPressed === 16) {
+              shift = true;
+            }
+            
+            if ((keyPressed >= 65 && keyPressed <= 90) &&      // letters
+                roomName.text.length < 16) {
+
+              if (shift) {
+                roomName.text += String.fromCharCode(keyPressed);
+              } else {
+                roomName.text += String.fromCharCode(keyPressed + 32);
+              }
+            } else if ((keyPressed >= 48 && keyPressed <= 57) && roomName.text.length < 16) {   // numbers
+              roomName.text += String.fromCharCode(keyPressed);
+            } else if ((keyPressed >= 96 && keyPressed <= 105) && roomName.text.length < 16) {   // numbers
+              roomName.text += String.fromCharCode(keyPressed - 48);
+            } else if (keyPressed === 8) {  // backspace
+              roomName.text = roomName.text.substr(0, roomName.text.length - 1);
+            }
+            
+          } else if (gameState === 'playing') {
+            // W OR UP
+            if(keyPressed === 87 || keyPressed === 38) {
+              movement.up = true;
+            }
+            // A OR LEFT
+            else if(keyPressed === 65 || keyPressed === 37) {
+              movement.left = true;
+            }
+            // S OR DOWN
+            else if(keyPressed === 83 || keyPressed === 40) {
+              movement.down = true;
+            }
+            // D OR RIGHT
+            else if(keyPressed === 68 || keyPressed === 39) {
+              movement.right = true;
+            }
+            // SPACE
+            else if(keyPressed === 32) {
+              movement.sink = true;
+            }
+            // SHIFT
+            else if(keyPressed === 16) {
+              movement.boost = true;
+            }
+
+            socket.emit('inputSend', { info: {id: id}, data: movement } );
           }
-          // A OR LEFT
-          else if(keyPressed === 65 || keyPressed === 37) {
-            movement.left = true;
-          }
-          // S OR DOWN
-          else if(keyPressed === 83 || keyPressed === 40) {
-            movement.down = true;
-          }
-          // D OR RIGHT
-          else if(keyPressed === 68 || keyPressed === 39) {
-            movement.right = true;
-          }
-          // SPACE
-          else if(keyPressed === 32) {
-            movement.sink = true;
-          }
-          // SHIFT
-          else if(keyPressed === 16) {
-            movement.boost = true;
-          }
-          
-          socket.emit('inputSend', { info: {id: id}, data: movement } );
           
           e.preventDefault();
         };
         
         const keyUpHandler = (e) => {
           var keyPressed = e.which;
+          
+          if (gameState === 'menu') {
 
-          // W OR UP
-          if(keyPressed === 87 || keyPressed === 38) {
-            movement.up = false;
-          }
-          // A OR LEFT
-          else if(keyPressed === 65 || keyPressed === 37) {
-            movement.left = false;
-          }
-          // S OR DOWN
-          else if(keyPressed === 83 || keyPressed === 40) {
-            movement.down = false;
-          }
-          // D OR RIGHT
-          else if(keyPressed === 68 || keyPressed === 39) {
-            movement.right = false;
-          }
-          // SPACE
-          else if(keyPressed === 32) {
-            movement.sink = false;
-          }
-          // SHIFT
-          else if(keyPressed === 16) {
-            movement.boost = false;
-          }
+            if (keyPressed === 16) {
+              shift = false;
+            }
+          } else if (gameState === 'playing') {
+             // W OR UP
+            if(keyPressed === 87 || keyPressed === 38) {
+              movement.up = false;
+            }
+            // A OR LEFT
+            else if(keyPressed === 65 || keyPressed === 37) {
+              movement.left = false;
+            }
+            // S OR DOWN
+            else if(keyPressed === 83 || keyPressed === 40) {
+              movement.down = false;
+            }
+            // D OR RIGHT
+            else if(keyPressed === 68 || keyPressed === 39) {
+              movement.right = false;
+            }
+            // SPACE
+            else if(keyPressed === 32) {
+              movement.sink = false;
+            }
+            // SHIFT
+            else if(keyPressed === 16) {
+              movement.boost = false;
+            }
+            // ESC
+              // leaves the room we're currently in
+            else if(keyPressed === 27) {
+              leaveRoom();
+            }
+
+            socket.emit('inputSend', { info: {id: id}, data: movement } );
           
-          socket.emit('inputSend', { info: {id: id}, data: movement } );
-          
+          }
           e.preventDefault();
         };
 
         const resizeCanvas = (e) => {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-
-          center = {
-              x:window.innerWidth / 2,
-              y:window.innerHeight / 2
-          };
           
-          console.log('resized');
-        }
+          const container = document.querySelector('#canvasContainer');
+          
+          canvas.width  = container.clientWidth;
+          canvas.height = container.clientHeight;
+
+          center.x = container.clientWidth / 2;
+          center.y = container.clientHeight / 2;
+          
+          center.wX = window.innerWidth / 2;
+          center.wY = container.offsetTop - (container.clientHeight / 2);
+          
+          console.dir(container);
+          console.dir(center);
+        };
+        
+        const getMouse = (e) => {
+          mouse.x = e.pageX - e.target.offsetLeft;
+          mouse.y = e.pageY - e.target.offsetTop;
+        };
 
         const init = () => {
           canvas = document.querySelector("#canvas");
           ctx = canvas.getContext("2d");
           
-          // resizeCanvas();
+          resizeCanvas();
 
           socket = io.connect();
           
-          //socket.emit('join', {});
+          socket.on('fullRoom', roomFull);
 
           socket.on('joinedRoom', joinRoom);
           
           socket.on('userJoined', addUser);
 
           socket.on('userLeft', removeUser);
-
-          //socket.on('postUpdate', update);
           
           socket.on('postUpdate', updateData);
-
-          document.body.addEventListener('keydown', keyDownHandler);
-          document.body.addEventListener('keyup', keyUpHandler);
+          
+          const container = document.querySelector('#canvasContainer');
+          
+          window.addEventListener('keydown', keyDownHandler);
+          window.addEventListener('keyup', keyUpHandler);
+          
+          window.onmousedown = (e) => {
+            getMouse(e);
+            mouse.clicked = true;
+          }
+          window.onmouseup = (e) => {
+            getMouse(e);
+            mouse.clicked = false;
+          }
+          window.onmousemove = getMouse;
           
           window.addEventListener('resize', resizeCanvas);
-          
-          window.addEventListener('keyPress');
           
           redraw();
         };
@@ -386,6 +1196,8 @@
     </script>
 </head>
 <body>
-    <canvas id="canvas" height=960 width=960>Please use an HTML 5 browser</canvas>
+  <div id="canvasContainer">
+    <canvas id="canvas" height=900 width=900>Please use an HTML 5 browser</canvas>
+  </div>
 </body>
 </html>

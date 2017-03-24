@@ -99,7 +99,6 @@ class Physics {
           if (user.gameData.sinkProgress > 0) {
             user.gameData.sinkProgress -= this.dT;
             user.gameData.physics.mass = 1 + (user.gameData.sinkProgress * boostWeight);
-            console.log(user.gameData.sinkProgress);
 
             if (user.gameData.sinkProgress <= 0) {
               user.gameData.sinkProgress = 0;
@@ -124,8 +123,8 @@ class Physics {
     for (let i = 0; i < dataKeys.length; i++) {
       const user = data[dataKeys[i]];
       const gameData = user.gameData;
-      
-      
+
+
         // check if the user is sunken
           // skip physics if it is
       if (!gameData.sunken) {
@@ -301,7 +300,6 @@ class Physics {
         gameData.b_y = gameData.a_y;
         gameData.a_x += gameData.physics.velocity.x * this.dT;
         gameData.a_y += gameData.physics.velocity.y * this.dT;
-        
       }
     }
   }
